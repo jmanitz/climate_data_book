@@ -1,0 +1,143 @@
+---
+title: "Average Temperature in Boston"
+author: "Juliane Manitz"
+date: "`r format(Sys.time(),  '%d %B, %Y')`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(readxl)
+library(tidyr)
+require(purrr)
+require(magrittr)
+
+require(gridExtra)
+library(ggplot2)
+library(viridis)
+```
+
+
+## Load Data
+
+NOWData - NOAA Online Weather Data. Monthly summarized data calculates averages, totals, daily extremes or frequencies for the selected variable for each month of the year for the selected range of years. Note: trace precipition/snowfall/snow depth amounts are treated as zero in sums, mean, and number of days counts. Annual average temperatures are the average of the twelve monthly values. Temperatures are reported in degrees F; precipitation, snowfall and snow depth are reported in inches. Source: https://www.weather.gov/wrh/Climate?wfo=box
+
+```{r}
+# To load all sheets in a workbook, use lapply()
+path <- "Temp_Boston.xlsx"
+dt_list <- map(excel_sheets(path), read_excel, path = path, skip=2)
+names(dt_list) <- excel_sheets(path)
+
+# Data preprocessing
+dt_list2 <- lapply(names(dt_list), function(x)
+  dt_list[[x]] %>%  
+    mutate_if(is.character, list(~na_if(., "M") %>% na_if(., "T") %>% as.numeric)) %>%
+    pivot_longer(-Year, names_to = "Month", values_to = x)
+)
+
+# Combine list into one dataset
+dt <- Reduce(left_join, dt_list2)
+
+# Separate Annual averages from monthly values
+dtY <- dt %>% filter(Month == "Annual")
+dtM <- dt %>% filter(Month != "Annual") %>% 
+  mutate(date = paste0("01-",tolower(Month),"-",Year) %>% as.Date(format = "%d-%b-%Y"))
+
+# Save data 
+save(dtY, dtM, file = "TempBostonTS.RData")
+```
+
+## Time Series of Average Temperature in Boston, MA
+
+Temperature is one of the most critical indicators of the climate crisis. Climate scientists track global, regional, and local temperature trends over time, focusing on surface temperatures, sea surface temperatures (SST), and atmospheric temperatures at various altitudes.
+
+In this example, we study the average temperature in Boston MA, which has been recorded since 1872. We decompose the time series into trend, seasonality and random error term. 
+
+```{r}
+#load("TempBostonTS.RData")
+
+ts_decomposed <- dtM %>% select(meanTemp) %>% 
+  # Create time-series objects with freq 12 => Monthly data.
+  stats::ts(frequency = 12, start = c(1872, 1)) %>% 
+  # Missing value imputation by Kalman smoothing
+  imputeTS::na_kalman() %>% 
+  # Decompose a time series into seasonal, trend and error
+  decompose(type = "additive")
+
+plot(ts_decomposed)
+```
+
+We look in more detail into the trend component of the time series. For reference, we add the mean temperature before 1950 and the locally estimated smoothed trend. 
+
+```{r}
+# Calculate mean Temperature before 1950
+ref1950 = dtM %>% filter(Year<1950) %>% summarize(mean(meanTemp, na.rm=TRUE)) %>% pull()
+
+# Plot time series trend component 
+data.frame(trend=ts_decomposed$trend, date=time(ts_decomposed$x)) %>% 
+  ggplot(aes(x=date, y=trend)) + geom_line() + 
+  # Add reference: mean temperature before 1950
+  geom_hline(aes(color = "Average temperatue\nbefore 1950", yintercept = ref1950), size = 1) + 
+  # Add loess smoothed trend
+  stat_smooth(aes(color = "Loess smoothing"), method = "loess", se=FALSE) +
+  scale_x_continuous(breaks=seq(1850, 2025, 25)) + 
+  labs(x="year", y="Annual Temperature (in F)", title="Temperature Trend in Boston, MA", color="") +
+  theme_minimal() + theme(legend.position = c(.15,.85))
+```
+
+De-seasonalizing throws insight about the seasonal pattern in the time series and helps to model the data without the seasonal effects.
+
+```{r}
+# De-seasonalized time series
+ts_deseasonalized <- forecast::seasadj(ts_decomposed)  # de-seasonalize
+forecast::ggseasonplot(ts_deseasonalized, s = 12, main="Seasonal plot: Boston Temperature",  continuous=TRUE, year.labels=TRUE) + theme_minimal()
+```
+
+
+## Summer Temperature Shift 
+
+```{r}
+# Define bins for coloring based on early data < 1950
+cols <-c("cornflowerblue","cornsilk","brown1","darkred") 
+cc <- dtM %>% filter(Month %in% c("Jun","Jul","Aug","Sep") & Year < 1950) %>% 
+  pull(meanTemp) %>% quantile(probs =c(.325,.5,.95))
+dtM %<>% mutate(meanTempC = factor(cut(meanTemp, breaks = c(0,cc,120)), 
+                labels=c("Cooler than average", "Average", "Warmer than average", "Extremely hot")))
+```
+
+```{r, fig.height=10, fig.width=6, warning=FALSE}
+p1 <- dtM %>% 
+  filter(Month %in% c("Jun","Jul","Aug", "Sep") & Year < 1950) %>% 
+  ggplot(aes(meanTemp, fill = meanTempC)) + scale_fill_manual(values = cols) + 
+  geom_histogram(bins = 27, show.legend = TRUE) +
+  labs(y="Frequency", x="Temperature (in F)", 
+       title="Summer Temperatures in Boston, MA", subtitle = "1872-1950", fill="") +
+  scale_x_continuous(limits = c(57,82), breaks=seq(50,120, 5)) + 
+  theme_minimal() + theme(legend.position = c(0.85,0.75))
+
+p2 <- dtM %>% 
+  filter(Month %in% c("Jun","Jul","Aug", "Sep") & Year < 1990 & Year > 1950) %>% 
+  ggplot(aes(meanTemp, fill = meanTempC)) + scale_fill_manual(values = cols) + 
+  geom_histogram(bins = 27, show.legend = FALSE) +
+  labs(y="Frequency", x="Temperature (in F)", subtitle = "1950-1990", fill="") +
+  scale_x_continuous(limits = c(57,82), breaks=seq(50,120, 5)) + 
+  theme_minimal() 
+
+p3 <- dtM %>% 
+  filter(Month %in% c("May","Jun","Jul","Aug", "Sep") & Year > 1990) %>% 
+  ggplot(aes(meanTemp, fill = meanTempC)) + scale_fill_manual(values = cols) + 
+  geom_histogram(bins = 27, show.legend = FALSE) +
+  labs(y="Frequency", x="Temperature (in F)", subtitle="1990-2024", fill="") +
+  scale_x_continuous(limits = c(57,82), breaks=seq(50,120, 5)) + 
+  theme_minimal() 
+
+grid.arrange(p1,p2,p3,ncol=1)
+```
+
+## Session Information (for Reproducibility)
+
+```{r}
+print(sessionInfo(), locale = FALSE)
+```
