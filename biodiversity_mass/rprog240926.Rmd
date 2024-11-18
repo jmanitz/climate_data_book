@@ -1,0 +1,172 @@
+---
+title: "Land Protection Status in Massachuetts"
+author: "Juliane Manitz"
+date: "`r format(Sys.time(),  '%d %B, %Y')`"
+output: github_document
+---
+  
+<!-- ## Libraries and settings -->
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=10)
+
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+require(ggmosaic)
+library(gt)
+
+# helper function
+calc_prop <- function(x){
+  # Calculates proportion of land in Massachuetts; total area (wiki) 10,565 sq mi (27,363 km2)
+  # input x = area in acre, will be converted to sq.miles (1 Acre = 0.0015625 Sq. mile)
+  as.numeric(x * 0.0015625 / 10565)[1]*100
+}
+```
+
+## Background: 30x30 goal 
+
+The [30x30 goal](https://www.campaignfornature.org/Background) is a global conservation initiative aimed at protecting 30% of the planet’s land and oceans by 2030. It seeks to safeguard biodiversity, mitigate climate change, and promote ecosystem resilience by preserving critical habitats and ecosystems. Endorsed by numerous countries, including the United States, and environmental organizations, the goal aims to halt the rapid loss of nature, restore degraded environments, and support Indigenous and local communities whose livelihoods depend on healthy ecosystems. By setting this target, 30x30 hopes to ensure long-term sustainability and environmental health for future generations.
+
+<!--30x30 goal: protect at least 30% of terrestrial and inland water and at least 30% of coastal and marine areas by 2030 as globally agreed by the Convention on Biological Diversity in the Kunming-Montreal Post-2020 Global Biodiversity Framework. [Source: https://www.campaignfornature.org/Background] -->
+
+[Rosa and Malcom (2020)](https://doi.org/10.17605/OSF.IO/2PRDY) performed a multi-scale analyses that compares protected area GAP status, endangered species richness, and carbon sequestration potential. Their analysis demonstrates that 30x30 is numerically achievable nationally, but high spatial heterogeneity highlights the need for tailored approaches from a mix of authorities at federal, regional and state scales.
+
+<!--Source: Lindsay Rosa, Ph.D; Jacob Malcom, Ph.D; Center for Conservation Innovation, Defenders of Wildlife: GETTING TO 30X30: Guidelines for Decision-makers [https://defenders-cci.org/publication/30x30-report/; https://doi.org/10.17605/OSF.IO/2PRDY; July 2020] -->
+
+## Massachuetts Map
+
+Source:	U.S. Geological Survey (USGS) Gap Analysis Project (GAP), 2022, Protected Areas Database of the United States (PAD-US) 3.0: U.S. Geological Survey data release, https://doi.org/10.5066/P9Q9LQ4B. 
+
+Only GAP 1 and 2 are typically considered protected. However, GAP 3 areas are governed under multipleuse
+mandates (e.g., wildlife, forestry and mining) and may have particular potential to advance biodiversity and climate protections more quickly through administrative mechanisms ([Rosa and Malcom, 2020)](https://doi.org/10.17605/OSF.IO/2PRDY). 
+
+```{r}
+map <- st_read("map_data/PADUS3_0Combined_StateMA.shp")
+map_dt <- map %>% st_drop_geometry() 
+```
+
+### GAP status
+
+```{r}
+#GAP_Sts # GAP status
+ggplot(data = map) + geom_sf(aes(fill = GAP_Sts), color="lightgrey") + 
+  scale_fill_viridis(discrete = TRUE) +
+  theme_minimal() + theme(legend.position = "bottom")
+
+map_dt %>% group_by(GAP_Sts) %>% 
+  summarize(pct = sum(GIS_Acres) %>% calc_prop()) %>% #arrange(desc(pct)) %>% 
+  gt() %>% fmt_number("pct")
+```
+
+### Owners Type
+
+```{r}
+#d_Own_Type #Owners Type
+ggplot(data = map) + geom_sf(aes(fill = d_Own_Type), color="lightgrey") + 
+  scale_fill_viridis(discrete = TRUE) +
+  theme_minimal() + theme(legend.position = "bottom")
+
+map_dt %>% group_by(d_Own_Type) %>% 
+  summarize(pct = sum(GIS_Acres) %>% calc_prop()) %>%
+  arrange(desc(pct)) #%>% gt() %>% fmt_number("pct")
+```
+
+### Management Type
+
+```{r}
+#d_Mang_Typ #Management Type
+ggplot(data = map) + geom_sf(aes(fill = d_Mang_Typ), color="lightgrey") + 
+  scale_fill_viridis(discrete = TRUE) +
+  theme_minimal() + theme(legend.position = "bottom")
+
+map_dt %>% group_by(d_Mang_Typ) %>% 
+  summarize(pct = sum(GIS_Acres) %>% calc_prop()) %>%
+  arrange(desc(pct)) #%>% gt() %>% fmt_number("pct")
+```
+
+<!-- 
+### Designation Type
+
+```{r, eval=FALSE}
+#d_Des_Tp #Designation Type
+ggplot(data = map) + geom_sf(aes(fill = d_Des_Tp), color="lightgrey") + 
+  scale_fill_viridis(discrete = TRUE) +
+  theme_minimal() + theme(legend.position = "bottom")
+
+map_dt %>% group_by(d_Des_Tp) %>% 
+  summarize(sum = sum(GIS_Acres) %>% calc_prop()) %>% gt()
+```
+-->
+
+### Public access
+
+```{r}
+#d_Pub_Acce # Public access
+ggplot(data = map) + geom_sf(aes(fill = d_Pub_Acce), color="lightgrey") + 
+  scale_fill_viridis(discrete = TRUE) +
+  theme_minimal() + theme(legend.position = "bottom")
+
+map_dt %>% group_by(d_Pub_Acce) %>% 
+  summarize(pct = sum(GIS_Acres) %>% calc_prop()) %>%
+  arrange(desc(pct)) #%>% gt() %>% fmt_number("pct")
+```
+
+## Proportion of Protected Land in Massachuetts
+
+In Massachusetts, only about 5% of the land and 1.5% of the ocean are protected from logging and mining, a far cry from the 30% nationwide pledge. 
+
+Massachusetts protected areas (GAP 1+2 = 5.6%) and GAP3 = 11.2%, most is under state management [Source: United States Geological Survey (USGS) Protected Areas Database of the United States (PAD-US) https://maps.usgs.gov/padusdataexplorer/#/protected-areas] 
+
+```{r}
+# GAP 1+2
+map %>% st_drop_geometry() %>% filter(GAP_Sts < 3) %>% 
+  summarize(sum = sum(GIS_Acres)) %>% calc_prop()
+
+# GAP 1-3
+map %>% st_drop_geometry() %>% filter(GAP_Sts < 4) %>% 
+  summarize(sum = sum(GIS_Acres)) %>% calc_prop()
+```
+
+## More details
+
+<!-- 
+boxplot Variation of GIS_Acres by GAP
+Table GAP vs public access and other factors
+-->
+
+```{r, warning=FALSE}
+map_dt %>% 
+  ggplot(aes(y=GIS_Acres, x=GAP_Sts, fill = GAP_Sts)) + 
+  geom_boxplot() + scale_y_log10() + 
+  labs(title = "Area by GAP status", y="ares in acres", x="GAP status") + 
+  scale_fill_viridis(discrete = TRUE) + theme_minimal()
+
+ggplot(data = map_dt) +
+  geom_mosaic(aes(x = product(d_Own_Type, GAP_Sts), fill=d_Own_Type)) + 
+  labs(title='Owner Type by GAP Status', x="GAP status") + 
+  scale_fill_viridis(discrete = TRUE) + theme_minimal()
+
+ggplot(data = map_dt) +
+  geom_mosaic(aes(x = product(d_Mang_Typ, GAP_Sts), fill=d_Mang_Typ)) + 
+  labs(title='Management Type by GAP Status', x="GAP status") + 
+  scale_fill_viridis(discrete = TRUE) + theme_minimal()
+
+ggplot(data = map_dt) +
+  geom_mosaic(aes(x = product(d_Pub_Acce, GAP_Sts), fill=d_Pub_Acce)) + 
+  labs(title='Public Access by GAP Status', x="GAP status") + 
+  scale_fill_viridis(discrete = TRUE) + theme_minimal()
+```
+
+## Pending Action by Massachuetts Government
+
+Healey establishes biodiversity goals with (executive order)[https://www.mass.gov/news/governor-healey-celebrates-climate-week-by-establishing-nations-first-long-term-biodiversity-goals-single-use-plastic-bottle-ban], which directs the state to develop biodiversity goals for 2030, 2040, and 2050. The [administration celebrates](https://www.wbur.org/news/2023/09/21/massachusetts-conservation-biodiversity) itselves, because Massachusetts is the first state to set metrics out to 2050, and the first on the East Coast to include coastal and marine biodiversity. However, the deadline to make a plan was missed. 
+
+Moreover, Healey did not renew logging moratorium on state land, which [expired Jan 5th, 2024](https://www.nepm.org/regional-news/2024-01-05/massachusetts-issues-climate-forestry-report-ends-tree-cutting-pause-loggers-want-work-to-begin). She was critized as it did not allow "climate-smart" management/interventions. 
+
+# Session Information (for Reproducibility)
+
+```{r}
+print(sessionInfo(), locale = FALSE)
+```
