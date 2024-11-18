@@ -6,3 +6,10 @@ In this example, we study the average temperature in Boston MA, which has been r
  
 https://github.com/jmanitz/climate_data_book/blob/main/temp_boston/temp241011.md
 
+## Spatial Analysis: Biodiversity Protection Status in Massachusetts
+
+The 30x30 goal is a global conservation initiative aimed at protecting 30% of the planet’s land and oceans by 2030. In this context, we analyze the proportion of protected areas in the Commonwealth of Massachusetts.
+
+https://github.com/jmanitz/climate_data_book/blob/main/biodiversity_mass/rprog240926.md
+
+
