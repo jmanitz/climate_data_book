@@ -1,0 +1,53 @@
+---
+title: "Sea-Level Projection 2100"
+author: "Juliane Manitz"
+date: "`r format(Sys.time(),  '%d %B, %Y')`"
+output: github_document
+---
+
+<!-- ## Libraries and settings -->
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=10)
+
+library(tidyverse)
+library(ggmap)
+```
+
+## Background: Sea Level Rise 
+
+Sea Level Rise is a central variable in climate data science. Monitoring sea level is critical for assessing the impacts of melting glaciers and polar ice caps, and thermal expansion of water due to warming. This is key for predicting coastal flooding and erosion risks. Projections under different scenarios based on the assessment presented in the IPCC Sixth Assessment Report are available in the NASA sea level projection tool.
+
+## Sea-Level Projection Data
+
+Assuming intermediate GHG emissions (SSP2-4.5, CO2 emissions around current levels until 2050, then falling but not reaching net zero by 2100), we can expect a sea-level rise of between 43 and 76 cm (17 - 30in), although the exact amount depends on several factors, such as ice sheet dynamics and regional variations. 
+
+Source: https://sealevel.nasa.gov/ipcc-ar6-sea-level-projection-tool
+
+```{r, message=FALSE} 
+# Load sea-level data
+dt <- read.csv("sea-level-projection-data.csv", skip=3)
+# Add geo location to the dataset
+#ggmap::register_google(key="xxx", write =TRUE)
+dt[c("lon","lat")] <- ggmap::geocode(dt$location)
+```
+
+## Plot World Map
+
+```{r}
+# World map data
+world <- map_data("world")
+
+ggplot() + 
+  geom_polygon(data = world,  aes(long, lat, group = group),
+               color = "darkgrey", fill = "lightgrey", linewidth=0.1) + 
+  geom_point(data=dt, aes(lon, lat, size=sea_level_proj), color="#50A7BA") +
+  geom_text(data=dt, aes(lon, lat, label=location), hjust=1, vjust=1, size=3) +
+  theme_void() + labs(size = "Sea-level rise\n2100 (in cm)")
+```
+
+## Session Information (for Reproducibility)
+
+```{r}
+print(sessionInfo(), locale = FALSE)
+```
